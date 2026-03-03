@@ -34,31 +34,40 @@ export async function GET(req: NextRequest) {
 
   if (!language) return apiError("Missing required query param: language");
 
-  // 1. Bootstrap cards for any new lessons (idempotent)
-  const lessonsSnap = await adminDb
-    .collection("lessons")
-    .where("language", "==", language)
-    .get();
+  // 1. Fetch lessons + all user cards for this language IN PARALLEL (2 queries total,
+  //    replacing the previous N sequential cardRef.get() calls — one per lesson item).
+  const [lessonsSnap, allCardsSnap] = await Promise.all([
+    adminDb.collection("lessons").where("language", "==", language).get(),
+    adminDb
+      .collection("users")
+      .doc(uid)
+      .collection("cards")
+      .where("language", "==", language)
+      .get(),
+  ]);
 
   const lessons: Lesson[] = lessonsSnap.docs.map((d) => ({
     id: d.id,
     ...(d.data() as Omit<Lesson, "id">),
   }));
 
+  // Build an in-memory map of existing cards so we can reuse it for step 2
+  // without any additional Firestore queries.
+  const existingCards = new Map<string, SRSCard>(
+    allCardsSnap.docs.map((d) => {
+      const card = d.data() as SRSCard;
+      return [card.id, card];
+    }),
+  );
+
+  // Bootstrap missing cards (batch write — only for cards not yet in Firestore)
   const batch = adminDb.batch();
   let bootstrapped = 0;
 
   for (const lesson of lessons) {
     for (const item of lesson.items) {
       const cardId = `${language}_${lesson.id}_${item.id}`;
-      const cardRef = adminDb
-        .collection("users")
-        .doc(uid)
-        .collection("cards")
-        .doc(cardId);
-
-      const snap = await cardRef.get();
-      if (!snap.exists) {
+      if (!existingCards.has(cardId)) {
         const card: SRSCard = {
           id: cardId,
           uid,
@@ -71,48 +80,39 @@ export async function GET(req: NextRequest) {
           dueDate: today(),
           lastReviewed: null,
         };
+        const cardRef = adminDb
+          .collection("users")
+          .doc(uid)
+          .collection("cards")
+          .doc(cardId);
         batch.set(cardRef, card);
+        existingCards.set(cardId, card); // keep in-memory map up to date
         bootstrapped++;
       }
     }
   }
   if (bootstrapped > 0) await batch.commit();
 
-  // 2. Get cards (lesson-specific: all words; regular: due cards only)
+  // 2. Filter cards from the in-memory map — no extra Firestore round-trip needed.
+  const todayStr = today();
   let cards: SRSCard[];
 
   if (lessonId) {
-    // Lesson mode: show every word in that lesson, shuffled
-    const snap = await adminDb
-      .collection("users")
-      .doc(uid)
-      .collection("cards")
-      .where("language", "==", language)
-      .where("lessonId", "==", lessonId)
-      .get();
-    cards = shuffle(snap.docs.map((d) => d.data() as SRSCard)).slice(0, limit);
+    // Lesson mode: all words for that lesson, shuffled
+    cards = shuffle(
+      Array.from(existingCards.values()).filter((c) => c.lessonId === lessonId),
+    ).slice(0, limit);
   } else {
-    // Daily mode: due cards first, fall back to earliest if none due
-    const dueSnap = await adminDb
-      .collection("users")
-      .doc(uid)
-      .collection("cards")
-      .where("language", "==", language)
-      .where("dueDate", "<=", today())
-      .get();
-    cards = dueSnap.docs.map((d) => d.data() as SRSCard);
-    if (!cards.length) {
-      const allSnap = await adminDb
-        .collection("users")
-        .doc(uid)
-        .collection("cards")
-        .where("language", "==", language)
-        .orderBy("dueDate")
-        .limit(limit)
-        .get();
-      cards = allSnap.docs.map((d) => d.data() as SRSCard);
+    // Daily mode: due cards first, fall back to earliest-due if none are due today
+    const dueCards = Array.from(existingCards.values()).filter(
+      (c) => c.dueDate <= todayStr,
+    );
+    if (dueCards.length > 0) {
+      cards = shuffle(dueCards).slice(0, limit);
     } else {
-      cards = shuffle(cards).slice(0, limit);
+      cards = Array.from(existingCards.values())
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+        .slice(0, limit);
     }
   }
 
