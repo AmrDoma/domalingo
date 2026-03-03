@@ -1,0 +1,84 @@
+# Cloud Build CI/CD — builds, pushes, and deploys to Cloud Run on every push.
+#
+# Required one-time setup (see README for full walkthrough):
+#   1. Enable APIs: Cloud Build, Cloud Run, Artifact Registry, Secret Manager
+#   2. Create Artifact Registry repo:
+#        gcloud artifacts repositories create domalingo \
+#          --repository-format=docker --location=europe-west1
+#   3. Store secrets in Secret Manager:
+#        echo -n 'YOUR_JSON_HERE' | \
+#          gcloud secrets create domalingo-firebase-admin --data-file=-
+#        echo -n 'YOUR_KEY_HERE' | \
+#          gcloud secrets create domalingo-unsplash-key --data-file=-
+#   4. Grant Cloud Build SA access to Secret Manager & Cloud Run:
+#        PROJECT_NUMBER=$(gcloud projects describe domalingo-a20a0 --format='value(projectNumber)')
+#        gcloud secrets add-iam-policy-binding domalingo-firebase-admin \
+#          --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+#          --role="roles/secretmanager.secretAccessor"
+#        gcloud secrets add-iam-policy-binding domalingo-unsplash-key \
+#          --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+#          --role="roles/secretmanager.secretAccessor"
+#        gcloud projects add-iam-policy-binding domalingo-a20a0 \
+#          --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+#          --role="roles/run.admin"
+#        gcloud iam service-accounts add-iam-policy-binding \
+#          ${PROJECT_NUMBER}-compute@developer.gserviceaccount.com \
+#          --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+#          --role="roles/iam.serviceAccountUser"
+#   5. Create a Cloud Build trigger pointed at your repo with substitutions below.
+
+substitutions:
+  _REGION: europe-west1
+  _SERVICE: domalingo
+  _IMAGE: europe-west1-docker.pkg.dev/domalingo-a20a0/domalingo/app
+  # ── Set these in the Cloud Build trigger UI ──────────────────────────────────
+  _NEXT_PUBLIC_FIREBASE_API_KEY: ""
+  _NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ""
+  _NEXT_PUBLIC_FIREBASE_PROJECT_ID: ""
+  _NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ""
+  _NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ""
+  _NEXT_PUBLIC_FIREBASE_APP_ID: ""
+
+steps:
+  # ── 1. Build the Docker image ─────────────────────────────────────────────
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=$_IMAGE:$COMMIT_SHA
+      - --tag=$_IMAGE:latest
+      - --cache-from=$_IMAGE:latest
+      - --build-arg=NEXT_PUBLIC_FIREBASE_API_KEY=$_NEXT_PUBLIC_FIREBASE_API_KEY
+      - --build-arg=NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+      - --build-arg=NEXT_PUBLIC_FIREBASE_PROJECT_ID=$_NEXT_PUBLIC_FIREBASE_PROJECT_ID
+      - --build-arg=NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+      - --build-arg=NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+      - --build-arg=NEXT_PUBLIC_FIREBASE_APP_ID=$_NEXT_PUBLIC_FIREBASE_APP_ID
+      - .
+
+  # ── 2. Push both tags ─────────────────────────────────────────────────────
+  - name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, $_IMAGE]
+
+  # ── 3. Deploy to Cloud Run ────────────────────────────────────────────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE
+      - --image=$_IMAGE:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=5
+      - --memory=512Mi
+      - --cpu=1
+      - --set-secrets=FIREBASE_ADMIN_SERVICE_ACCOUNT=domalingo-firebase-admin:latest,UNSPLASH_ACCESS_KEY=domalingo-unsplash-key:latest
+
+images:
+  - $_IMAGE:$COMMIT_SHA
+  - $_IMAGE:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
