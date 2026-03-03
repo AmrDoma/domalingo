@@ -3,6 +3,7 @@
 import { Exercise, SRSQuality } from "@/types";
 import { MCQExercise } from "./MCQExercise";
 import { FillExercise } from "./FillExercise";
+import { ImageExercise } from "./ImageExercise";
 
 interface ExerciseCardProps {
   exercise: Exercise;
@@ -15,5 +16,7 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
       return <MCQExercise exercise={exercise} onAnswer={onAnswer} />;
     case "fill":
       return <FillExercise exercise={exercise} onAnswer={onAnswer} />;
+    case "image":
+      return <ImageExercise exercise={exercise} onAnswer={onAnswer} />;
   }
 }

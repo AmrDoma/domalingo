@@ -1,28 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const revalidate = 604800;
+
 /**
- * GET /api/image-proxy?q=wooden+table
- * Proxies a single Unsplash photo URL server-side so the API key is hidden.
+ * GET /api/image-proxy?q=printer
+ * Single Wikipedia API call: generator=search + prop=pageimages
+ * Returns the first result that has a lead thumbnail.
  */
 export async function GET(req: NextRequest) {
-  const query = req.nextUrl.searchParams.get("q");
-  if (!query) return NextResponse.json({ url: null });
-
-  const accessKey = process.env.UNSPLASH_ACCESS_KEY;
-  if (!accessKey) return NextResponse.json({ url: null });
+  const q = req.nextUrl.searchParams.get("q")?.trim();
+  if (!q) return NextResponse.json({ url: null });
 
   try {
-    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=squarish`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Client-ID ${accessKey}` },
-      next: { revalidate: 86400 },
-    });
+    const apiUrl =
+      `https://en.wikipedia.org/w/api.php?` +
+      new URLSearchParams({
+        action: "query",
+        generator: "search",
+        gsrsearch: q,
+        gsrlimit: "5",
+        prop: "pageimages",
+        pithumbsize: "480",
+        format: "json",
+        origin: "*",
+      });
 
+    const res = await fetch(apiUrl, { cache: "no-store" });
     if (!res.ok) return NextResponse.json({ url: null });
 
     const data = await res.json();
-    const photo = data.results?.[0];
-    return NextResponse.json({ url: photo?.urls?.small ?? null });
+    const pages: Record<
+      string,
+      { index?: number; thumbnail?: { source: string } }
+    > = data?.query?.pages ?? {};
+
+    // Sort by search rank (gsrsection index) and pick first with a thumbnail
+    const url =
+      Object.values(pages)
+        .sort((a, b) => (a.index ?? 99) - (b.index ?? 99))
+        .find((p) => p.thumbnail?.source)?.thumbnail?.source ?? null;
+
+    return NextResponse.json({ url });
   } catch {
     return NextResponse.json({ url: null });
   }

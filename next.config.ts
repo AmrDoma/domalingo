@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "plus.unsplash.com" },
+      // Wikipedia / Wikimedia images
+      { protocol: "https", hostname: "upload.wikimedia.org" },
     ],
   },
 };

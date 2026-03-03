@@ -69,6 +69,12 @@ export interface Lesson {
   description: string;
   emoji: string;
   items: LessonItem[];
+  /**
+   * When true, image exercises are included for words in this lesson.
+   * Set this on concrete-noun lessons (kitchen, food, clothing, etc.).
+   * Leave false/unset for colors, numbers, verbs, adjectives, etc.
+   */
+  imageSearch?: boolean;
 }
 
 // ─── User Profile ────────────────────────────────────────────────
@@ -114,7 +120,7 @@ export interface SRSCard {
 export type SRSQuality = 0 | 1 | 2 | 3; // again | hard | good | easy
 
 // ─── Exercises ───────────────────────────────────────────────────
-export type ExerciseType = "mcq" | "fill";
+export type ExerciseType = "mcq" | "fill" | "image";
 
 export interface Exercise {
   type: ExerciseType;

@@ -173,14 +173,24 @@ export async function GET(req: NextRequest) {
       const item = lesson.items.find((i) => i.id === card.itemId);
       if (!item) return null;
 
-      // Determine type pool based on exerciseType param and card repetitions
-      let typePool: Array<"mcq" | "fill">;
+      // Only include "image" type when the lesson opts in via imageSearch flag,
+      // or a specific item has imageUrl/unsplashQuery set.
+      const isImageable =
+        item.imageUrl || item.unsplashQuery || lesson.imageSearch;
+
+      let typePool: Array<"mcq" | "fill" | "image">;
       if (exerciseType === "mcq") {
         typePool = ["mcq"];
       } else if (exerciseType === "fill") {
         typePool = ["fill"];
+      } else if (isImageable) {
+        // image IS the visual MCQ — use it instead of text MCQ for imageable words
+        typePool =
+          card.repetitions < 2
+            ? ["image"] // fresh: always image
+            : ["image", "image", "fill"]; // practiced: lean image, mix fill
       } else {
-        // "both": weight towards MCQ for fresh cards, mix in fill once user has reps
+        // "both" + verb/adj/other: no image
         typePool = card.repetitions < 2 ? ["mcq"] : ["mcq", "mcq", "fill"];
       }
       const type = typePool[Math.floor(Math.random() * typePool.length)];

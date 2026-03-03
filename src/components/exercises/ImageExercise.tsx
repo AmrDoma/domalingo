@@ -16,18 +16,31 @@ export function ImageExercise({ exercise, onAnswer }: ImageExerciseProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(
     item.imageUrl ?? null,
   );
+  const [imgLoading, setImgLoading] = useState(!item.imageUrl);
   const [selected, setSelected] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
 
-  // Fetch Unsplash fallback if no GCP image
+  // Use unsplashQuery if set, otherwise fall back to the English translation
+  // (works great for Wikipedia which has an article for every concrete noun)
   useEffect(() => {
-    if (imageUrl || !item.unsplashQuery) return;
+    if (imageUrl) {
+      setImgLoading(false);
+      return;
+    }
+    const query = item.unsplashQuery ?? item.translation;
+    if (!query) {
+      setImgLoading(false);
+      return;
+    }
 
-    fetch(`/api/image-proxy?q=${encodeURIComponent(item.unsplashQuery)}`)
+    fetch(`/api/image-proxy?q=${encodeURIComponent(query)}`)
       .then((r) => r.json())
-      .then((d) => d.url && setImageUrl(d.url))
-      .catch(() => null);
-  }, [imageUrl, item.unsplashQuery]);
+      .then((d) => {
+        if (d.url) setImageUrl(d.url);
+      })
+      .catch(() => null)
+      .finally(() => setImgLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [options] = useState(() => {
     const all = [
@@ -56,7 +69,11 @@ export function ImageExercise({ exercise, onAnswer }: ImageExerciseProps) {
 
       {/* Image */}
       <div className="relative w-full aspect-square rounded-3xl overflow-hidden bg-gray-100 shadow-sm">
-        {imageUrl ? (
+        {imgLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin size-8 border-4 border-indigo-400 border-t-transparent rounded-full" />
+          </div>
+        ) : imageUrl ? (
           <Image
             src={imageUrl}
             alt={item.translation}
