@@ -49,6 +49,15 @@ const TYPE_OPTIONS: {
     text: "text-emerald-700",
     badge: "Recommended",
   },
+  {
+    value: "image",
+    label: "Images",
+    emoji: "🖼️",
+    description: "Identify words from photos. Great for visual learners.",
+    color: "bg-purple-50",
+    border: "border-purple-200",
+    text: "text-purple-700",
+  },
 ];
 
 export default function SessionPage() {
@@ -81,6 +90,14 @@ function SessionContent() {
     exerciseTypeParam ?? (lessonId ? null! : "both");
   // Show type picker when a lesson is selected but no type chosen yet
   const showTypePicker = !!lessonId && exerciseTypeParam === null;
+
+  // imageSearch is passed as ?images=1 from the lessons page — no extra fetch needed
+  const lessonHasImages = searchParams.get("images") === "1";
+
+  const visibleTypeOptions = TYPE_OPTIONS.filter((opt) => {
+    if (opt.value === "image") return lessonHasImages;
+    return true;
+  });
 
   const {
     exercises,
@@ -124,7 +141,7 @@ function SessionContent() {
             How do you want to practice this lesson?
           </p>
           <div className="flex flex-col gap-3">
-            {TYPE_OPTIONS.map((opt) => (
+            {visibleTypeOptions.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => {

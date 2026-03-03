@@ -152,7 +152,11 @@ export default function DashboardPage() {
               <div
                 key={lesson.id}
                 className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm border border-gray-100 active:scale-98 cursor-pointer"
-                onClick={() => router.push(`/session?lesson=${lesson.id}`)}
+                onClick={() =>
+                  router.push(
+                    `/session?lesson=${lesson.id}${lesson.imageSearch ? "&images=1" : ""}`,
+                  )
+                }
               >
                 <div className="text-3xl">{lesson.emoji}</div>
                 <div className="flex-1 min-w-0">

@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
       description: data.description,
       emoji: data.emoji,
       itemCount: (data.items ?? []).length,
+      imageSearch: data.imageSearch ?? false,
     };
   });
 
@@ -118,6 +119,12 @@ export async function POST(req: NextRequest) {
     description,
     emoji,
     items,
+    ...(typeof (body as Lesson).imageSearch === "boolean" && {
+      imageSearch: (body as Lesson).imageSearch,
+    }),
+    ...((body as Lesson).imageSource && {
+      imageSource: (body as Lesson).imageSource,
+    }),
   };
 
   await adminDb.collection("lessons").doc(lessonId).set(lesson);

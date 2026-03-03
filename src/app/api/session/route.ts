@@ -183,14 +183,11 @@ export async function GET(req: NextRequest) {
         typePool = ["mcq"];
       } else if (exerciseType === "fill") {
         typePool = ["fill"];
-      } else if (isImageable) {
-        // image IS the visual MCQ — use it instead of text MCQ for imageable words
-        typePool =
-          card.repetitions < 2
-            ? ["image"] // fresh: always image
-            : ["image", "image", "fill"]; // practiced: lean image, mix fill
+      } else if (exerciseType === "image") {
+        // Image mode: image for imageable words, mcq fallback for others
+        typePool = isImageable ? ["image"] : ["mcq"];
       } else {
-        // "both" + verb/adj/other: no image
+        // "both" = mixed difficulty: mcq + fill only, no images
         typePool = card.repetitions < 2 ? ["mcq"] : ["mcq", "mcq", "fill"];
       }
       const type = typePool[Math.floor(Math.random() * typePool.length)];

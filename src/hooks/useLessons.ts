@@ -11,6 +11,7 @@ export interface LessonSummary {
   description: string;
   emoji: string;
   itemCount: number;
+  imageSearch: boolean;
 }
 
 export function useLessons(language: string | undefined) {

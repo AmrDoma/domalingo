@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "plus.unsplash.com" },
       // Wikipedia / Wikimedia images
       { protocol: "https", hostname: "upload.wikimedia.org" },
+      // Pexels images
+      { protocol: "https", hostname: "images.pexels.com" },
     ],
   },
 };

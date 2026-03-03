@@ -75,6 +75,12 @@ export interface Lesson {
    * Leave false/unset for colors, numbers, verbs, adjectives, etc.
    */
   imageSearch?: boolean;
+  /**
+   * Which image source to use when fetching exercise images.
+   * "wikipedia" (default) works well for concrete nouns.
+   * "pexels" works well for verbs / actions (requires PEXELS_API_KEY).
+   */
+  imageSource?: "pexels" | "wikipedia";
 }
 
 // ─── User Profile ────────────────────────────────────────────────
@@ -97,8 +103,8 @@ export interface UserProfile {
 /** daily = SRS due queue | weak = flagged/failed words | new = never studied */
 export type PracticeMode = "daily" | "weak" | "new";
 
-/** mcq = multiple choice only | fill = fill-in-the-blank only | both = mixed */
-export type ExerciseTypeFilter = "mcq" | "fill" | "both";
+/** mcq = multiple choice only | fill = fill-in-the-blank only | both = mixed | image = image quiz */
+export type ExerciseTypeFilter = "mcq" | "fill" | "both" | "image";
 
 // ─── SRS Card ────────────────────────────────────────────────────
 export interface SRSCard {

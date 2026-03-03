@@ -20,8 +20,9 @@ export function ImageExercise({ exercise, onAnswer }: ImageExerciseProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
 
-  // Use unsplashQuery if set, otherwise fall back to the English translation
-  // (works great for Wikipedia which has an article for every concrete noun)
+  // Use unsplashQuery if set, otherwise fall back to the English translation.
+  // Routes to Pexels (for action/verb lessons) or Wikipedia (for noun lessons)
+  // based on lesson.imageSource.
   useEffect(() => {
     if (imageUrl) {
       setImgLoading(false);
@@ -32,8 +33,9 @@ export function ImageExercise({ exercise, onAnswer }: ImageExerciseProps) {
       setImgLoading(false);
       return;
     }
+    const source = exercise.lesson.imageSource ?? "wikipedia";
 
-    fetch(`/api/image-proxy?q=${encodeURIComponent(query)}`)
+    fetch(`/api/image-proxy?q=${encodeURIComponent(query)}&source=${source}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.url) setImageUrl(d.url);

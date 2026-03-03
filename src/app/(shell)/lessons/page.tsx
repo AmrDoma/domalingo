@@ -88,7 +88,11 @@ export default function LessonsPage() {
             <div
               key={lesson.id}
               className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm border border-gray-100 cursor-pointer active:scale-98 transition-transform"
-              onClick={() => router.push(`/session?lesson=${lesson.id}`)}
+              onClick={() =>
+                router.push(
+                  `/session?lesson=${lesson.id}${lesson.imageSearch ? "&images=1" : ""}`,
+                )
+              }
             >
               <div className="size-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl shrink-0">
                 {lesson.emoji}
