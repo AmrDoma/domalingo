@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useSession } from "@/hooks/useSession";
@@ -9,6 +9,21 @@ import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 
 export default function SessionPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+          <div className="animate-spin size-10 border-4 border-indigo-500 border-t-transparent rounded-full" />
+          <p className="text-gray-500 text-sm">Loading your exercises…</p>
+        </div>
+      }
+    >
+      <SessionContent />
+    </Suspense>
+  );
+}
+
+function SessionContent() {
   const { user, isGuest, loading: authLoading, profile } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
