@@ -9,14 +9,18 @@ import {
   LanguageCode,
   Lesson,
   LessonItem,
+  PracticeMode,
 } from "@/types";
 import { today, shuffle, pickRandom } from "@/lib/utils";
 
 const MAX_SESSION = 20;
 
 // ─────────────────────────────────────────────────────────────────
-// GET /api/session?language=de&limit=20
-// Returns today's due exercises for the authenticated user.
+// GET /api/session?language=de&mode=daily|weak|new&limit=20&lessonId=…
+// mode=daily (default) → SRS due cards
+// mode=weak            → cards flagged for review (struggled words)
+// mode=new             → cards never studied yet (repetitions=0)
+// lessonId             → overrides mode; returns all cards for that lesson
 // ─────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const decoded = await verifyAuth(req);
@@ -27,6 +31,8 @@ export async function GET(req: NextRequest) {
     "language",
   ) as LanguageCode | null;
   const lessonId = req.nextUrl.searchParams.get("lessonId");
+  const mode = (req.nextUrl.searchParams.get("mode") ??
+    "daily") as PracticeMode;
   const limit = Math.min(
     Number(req.nextUrl.searchParams.get("limit") ?? MAX_SESSION),
     50,
@@ -34,9 +40,8 @@ export async function GET(req: NextRequest) {
 
   if (!language) return apiError("Missing required query param: language");
 
-  // 1. Fetch lessons + all user cards for this language IN PARALLEL (2 queries total,
-  //    replacing the previous N sequential cardRef.get() calls — one per lesson item).
-  const [lessonsSnap, allCardsSnap] = await Promise.all([
+  // 1. Fetch lessons + all user cards + user profile IN PARALLEL
+  const [lessonsSnap, allCardsSnap, userSnap] = await Promise.all([
     adminDb.collection("lessons").where("language", "==", language).get(),
     adminDb
       .collection("users")
@@ -44,6 +49,7 @@ export async function GET(req: NextRequest) {
       .collection("cards")
       .where("language", "==", language)
       .get(),
+    adminDb.collection("users").doc(uid).get(),
   ]);
 
   const lessons: Lesson[] = lessonsSnap.docs.map((d) => ({
@@ -51,16 +57,26 @@ export async function GET(req: NextRequest) {
     ...(d.data() as Omit<Lesson, "id">),
   }));
 
-  // Build an in-memory map of existing cards so we can reuse it for step 2
-  // without any additional Firestore queries.
+  // Lessons the user has hidden from practice
+  const excludedLessons: string[] =
+    (userSnap.data()?.excludedLessons as string[]) ?? [];
+
+  // Build an in-memory map of existing cards; skip excluded lessons
   const existingCards = new Map<string, SRSCard>(
-    allCardsSnap.docs.map((d) => {
-      const card = d.data() as SRSCard;
-      return [card.id, card];
-    }),
+    allCardsSnap.docs
+      .filter((d) => {
+        const card = d.data() as SRSCard;
+        return !lessonId && excludedLessons.includes(card.lessonId)
+          ? false // exclude unless we're in explicit lesson mode
+          : true;
+      })
+      .map((d) => {
+        const card = d.data() as SRSCard;
+        return [card.id, card];
+      }),
   );
 
-  // Bootstrap missing cards (batch write — only for cards not yet in Firestore)
+  // Bootstrap missing cards (batch write — only for never-seen cards)
   const batch = adminDb.batch();
   let bootstrapped = 0;
 
@@ -86,24 +102,34 @@ export async function GET(req: NextRequest) {
           .collection("cards")
           .doc(cardId);
         batch.set(cardRef, card);
-        existingCards.set(cardId, card); // keep in-memory map up to date
+        existingCards.set(cardId, card);
         bootstrapped++;
       }
     }
   }
   if (bootstrapped > 0) await batch.commit();
 
-  // 2. Filter cards from the in-memory map — no extra Firestore round-trip needed.
+  // 2. Select cards based on mode (or lessonId override)
   const todayStr = today();
   let cards: SRSCard[];
 
   if (lessonId) {
-    // Lesson mode: all words for that lesson, shuffled
+    // Explicit lesson mode — show all words in that lesson regardless of exclusion
     cards = shuffle(
       Array.from(existingCards.values()).filter((c) => c.lessonId === lessonId),
     ).slice(0, limit);
+  } else if (mode === "weak") {
+    // Struggled / failed words
+    cards = shuffle(
+      Array.from(existingCards.values()).filter((c) => c.flaggedForReview),
+    ).slice(0, limit);
+  } else if (mode === "new") {
+    // Words never studied
+    cards = shuffle(
+      Array.from(existingCards.values()).filter((c) => c.repetitions === 0),
+    ).slice(0, limit);
   } else {
-    // Daily mode: due cards first, fall back to earliest-due if none are due today
+    // Daily: SRS due cards first, fall back to earliest-due
     const dueCards = Array.from(existingCards.values()).filter(
       (c) => c.dueDate <= todayStr,
     );
@@ -122,13 +148,13 @@ export async function GET(req: NextRequest) {
   const lessonMap = new Map<string, Lesson>(lessons.map((l) => [l.id, l]));
   const allItems: LessonItem[] = lessons.flatMap((l) => l.items);
 
-  // itemId → category, so distractors stay within the same category
+  // itemId → category for same-category distractors
   const itemCategory = new Map<string, string>();
   for (const l of lessons) {
     for (const i of l.items) itemCategory.set(i.id, l.category);
   }
 
-  // Deduplicate cards by itemId — same word can exist in multiple lessons
+  // Deduplicate cards by itemId
   const seenItemIds = new Set<string>();
   const uniqueCards = cards.filter((c) => {
     if (seenItemIds.has(c.itemId)) return false;
@@ -143,7 +169,7 @@ export async function GET(req: NextRequest) {
       const item = lesson.items.find((i) => i.id === card.itemId);
       if (!item) return null;
 
-      // Image exercises disabled – only MCQ and fill
+      // For weak/new modes always start with MCQ; mix in fill once the user has reps
       const typePool: Array<"mcq" | "fill"> =
         card.repetitions < 2 ? ["mcq"] : ["mcq", "mcq", "fill"];
       const type = typePool[Math.floor(Math.random() * typePool.length)];
@@ -152,7 +178,6 @@ export async function GET(req: NextRequest) {
       const sameCategory = allItems.filter(
         (i) => i.id !== item.id && itemCategory.get(i.id) === cat,
       );
-      // Fall back to all items if the category is too small
       const distPool =
         sameCategory.length >= 3
           ? sameCategory
@@ -163,7 +188,7 @@ export async function GET(req: NextRequest) {
     })
     .filter(Boolean);
 
-  return NextResponse.json({ exercises, totalDue });
+  return NextResponse.json({ exercises, totalDue, mode });
 }
 
 // ─────────────────────────────────────────────────────────────────

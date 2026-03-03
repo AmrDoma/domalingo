@@ -18,12 +18,6 @@ export interface Language {
 export const SUPPORTED_LANGUAGES: Language[] = [
   { code: "de", name: "German", flag: "🇩🇪" },
   { code: "fr", name: "French", flag: "🇫🇷" },
-  { code: "es", name: "Spanish", flag: "🇪🇸" },
-  { code: "it", name: "Italian", flag: "🇮🇹" },
-  { code: "pt", name: "Portuguese", flag: "🇵🇹" },
-  { code: "nl", name: "Dutch", flag: "🇳🇱" },
-  { code: "pl", name: "Polish", flag: "🇵🇱" },
-  { code: "tr", name: "Turkish", flag: "🇹🇷" },
 ];
 
 // ─── Lesson & Items ───────────────────────────────────────────────
@@ -83,7 +77,13 @@ export interface UserProfile {
   lastSessionDate: string | null; // "YYYY-MM-DD"
   totalXP: number;
   createdAt: number; // epoch ms
+  /** Lesson IDs the user has hidden from all practice modes */
+  excludedLessons?: string[];
 }
+
+// ─── Practice Mode ───────────────────────────────────────────────
+/** daily = SRS due queue | weak = flagged/failed words | new = never studied */
+export type PracticeMode = "daily" | "weak" | "new";
 
 // ─── SRS Card ────────────────────────────────────────────────────
 export interface SRSCard {

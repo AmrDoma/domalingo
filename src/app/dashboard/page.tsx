@@ -94,7 +94,7 @@ export default function DashboardPage() {
               variant="secondary"
               size="sm"
               className="mt-3"
-              onClick={() => router.push("/session")}
+              onClick={() => router.push("/practice")}
             >
               Practice again anyway
             </Button>
@@ -110,7 +110,7 @@ export default function DashboardPage() {
             <Button
               variant="secondary"
               size="md"
-              onClick={() => router.push("/session")}
+              onClick={() => router.push("/practice")}
               className="shrink-0 bg-white! text-indigo-600! hover:bg-indigo-50!"
             >
               Start →
@@ -153,7 +153,7 @@ export default function DashboardPage() {
               <div
                 key={lesson.id}
                 className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm border border-gray-100 active:scale-98 cursor-pointer"
-                onClick={() => router.push(`/lessons?id=${lesson.id}`)}
+                onClick={() => router.push(`/session?lesson=${lesson.id}`)}
               >
                 <div className="text-3xl">{lesson.emoji}</div>
                 <div className="flex-1 min-w-0">

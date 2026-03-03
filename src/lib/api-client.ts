@@ -1,4 +1,5 @@
 import { auth } from "@/lib/firebase";
+import type { Lesson, PracticeMode } from "@/types";
 
 /** Get the current user's Firebase ID token, or null if not signed in. */
 async function getIdToken(): Promise<string | null> {
@@ -40,10 +41,37 @@ export const api = {
     return res.json();
   },
 
-  /** GET /api/session?language=de&limit=20[&lessonId=...] */
-  async getSession(language: string, lessonId?: string, limit = 20) {
+  /**
+   * POST /api/lessons
+   * Create or overwrite a lesson. Requires the ADMIN_SECRET env var to be set
+   * and passed as the `x-admin-key` header.
+   */
+  async createLesson(
+    lesson: Omit<Lesson, "id"> & { id?: string },
+    adminKey: string,
+  ) {
+    const res = await fetch(`${BASE}/api/lessons`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+      body: JSON.stringify(lesson),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  /** GET /api/session?language=de&mode=daily|weak|new&limit=20[&lessonId=...] */
+  async getSession(
+    language: string,
+    lessonId?: string,
+    mode: PracticeMode = "daily",
+    limit = 20,
+  ) {
     const headers = await authHeaders();
-    const params = new URLSearchParams({ language, limit: String(limit) });
+    const params = new URLSearchParams({
+      language,
+      mode,
+      limit: String(limit),
+    });
     if (lessonId) params.set("lessonId", lessonId);
     const res = await fetch(`${BASE}/api/session?${params}`, { headers });
     if (!res.ok) throw new Error(await res.text());
@@ -80,6 +108,11 @@ export const api = {
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
+  },
+
+  /** Convenience: update which lessons are excluded from practice */
+  async updateExcludedLessons(excludedLessons: string[]) {
+    return api.updateProfile({ excludedLessons });
   },
 
   /** GET /api/cards?language=de&dueOnly=true */

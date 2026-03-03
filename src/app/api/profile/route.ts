@@ -33,6 +33,8 @@ export async function PUT(req: NextRequest) {
     allowed.activeLanguage = body.activeLanguage as LanguageCode;
   if (body.targetLanguages) allowed.targetLanguages = body.targetLanguages;
   if (body.displayName) allowed.displayName = body.displayName;
+  if (Array.isArray(body.excludedLessons))
+    allowed.excludedLessons = body.excludedLessons;
 
   const ref = adminDb.collection("users").doc(uid);
   const snap = await ref.get();

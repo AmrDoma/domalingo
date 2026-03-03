@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
 import { SUPPORTED_LANGUAGES, LanguageCode } from "@/types";
 import { api } from "@/lib/api-client";
+import { useLessons } from "@/hooks/useLessons";
 
 export default function ProfilePage() {
   const {
@@ -20,6 +21,17 @@ export default function ProfilePage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savingExclusions, setSavingExclusions] = useState(false);
+  const [excludedLessons, setExcludedLessons] = useState<string[]>([]);
+
+  const { lessons } = useLessons(profile?.activeLanguage);
+
+  // Sync excluded lessons from profile
+  useEffect(() => {
+    if (profile?.excludedLessons) {
+      setExcludedLessons(profile.excludedLessons);
+    }
+  }, [profile]);
 
   useEffect(() => {
     if (!authLoading && !user && !isGuest) router.replace("/");
@@ -50,6 +62,20 @@ export default function ProfilePage() {
   async function handleSignOut() {
     await signOut();
     router.replace("/");
+  }
+
+  async function toggleLessonExclusion(lessonId: string) {
+    const next = excludedLessons.includes(lessonId)
+      ? excludedLessons.filter((id) => id !== lessonId)
+      : [...excludedLessons, lessonId];
+    setExcludedLessons(next);
+    setSavingExclusions(true);
+    try {
+      await api.updateExcludedLessons(next);
+      await refreshProfile();
+    } finally {
+      setSavingExclusions(false);
+    }
   }
 
   return (
@@ -148,6 +174,53 @@ export default function ProfilePage() {
           </p>
         )}
       </section>
+
+      {/* Excluded lessons */}
+      {!isGuest && lessons.length > 0 && (
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+              Hidden from practice
+            </h2>
+            {savingExclusions && (
+              <span className="text-xs text-gray-400">Saving…</span>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            Toggle lessons you want to skip in Daily Review and Weak Words
+            modes.
+          </p>
+          <div className="flex flex-col gap-2">
+            {lessons.map((lesson) => {
+              const excluded = excludedLessons.includes(lesson.id);
+              return (
+                <button
+                  key={lesson.id}
+                  onClick={() => toggleLessonExclusion(lesson.id)}
+                  disabled={savingExclusions}
+                  className={`flex items-center gap-3 rounded-xl px-4 py-3 border text-sm font-medium transition-colors text-left ${
+                    excluded
+                      ? "border-red-200 bg-red-50 text-red-600"
+                      : "border-gray-200 bg-white text-gray-700"
+                  }`}
+                >
+                  <span className="text-xl">{lesson.emoji}</span>
+                  <span className="flex-1 truncate">{lesson.title}</span>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                      excluded
+                        ? "bg-red-100 text-red-600"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {excluded ? "Hidden" : "Active"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Actions */}
       <section className="flex flex-col gap-3">

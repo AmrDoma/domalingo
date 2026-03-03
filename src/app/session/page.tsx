@@ -7,6 +7,7 @@ import { useSession } from "@/hooks/useSession";
 import { ExerciseCard } from "@/components/exercises/ExerciseCard";
 import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import type { PracticeMode } from "@/types";
 
 export default function SessionPage() {
   return (
@@ -28,6 +29,7 @@ function SessionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const lessonId = searchParams.get("lesson") ?? undefined;
+  const mode = (searchParams.get("mode") ?? "daily") as PracticeMode;
   const {
     exercises,
     currentIndex,
@@ -38,7 +40,7 @@ function SessionContent() {
     error,
     startSession,
     submitAnswer,
-  } = useSession(lessonId);
+  } = useSession(lessonId, mode);
 
   // Redirect if not authed
   useEffect(() => {

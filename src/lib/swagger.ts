@@ -114,6 +114,12 @@ const spec: OpenAPIV3.Document = {
           },
           totalXP: { type: "integer", example: 420 },
           createdAt: { type: "integer", example: 1741000000000 },
+          excludedLessons: {
+            type: "array",
+            items: { type: "string" },
+            description: "Lesson IDs hidden from practice modes",
+            example: ["de_food_restaurant"],
+          },
         },
         required: [
           "uid",
@@ -219,6 +225,101 @@ const spec: OpenAPIV3.Document = {
 
     // ── Lessons ────────────────────────────────────────────────
     "/lessons": {
+      post: {
+        operationId: "createLesson",
+        tags: ["Lessons"],
+        summary: "Create or overwrite a lesson (admin only)",
+        description:
+          "Requires the `x-admin-key` header matching the `ADMIN_SECRET` env var.\n\n" +
+          "**AI generation template** — copy this JSON, fill in your content:\n\n" +
+          "```json\n" +
+          "{\n" +
+          '  \"language\": \"de\",\n' +
+          '  \"category\": \"food\",\n' +
+          '  \"title\": \"At the Restaurant\",\n' +
+          '  \"description\": \"Order food and drinks like a local.\",\n' +
+          '  \"emoji\": \"🍽️\",\n' +
+          '  \"items\": [\n' +
+          "    {\n" +
+          '      \"id\": \"steak\",\n' +
+          '      \"word\": \"das Steak\",\n' +
+          '      \"translation\": \"steak\",\n' +
+          '      \"article\": \"das\",\n' +
+          '      \"example\": \"Ich möchte ein Steak, bitte.\",\n' +
+          '      \"exampleTranslation\": \"I would like a steak, please.\"\n' +
+          "    }\n" +
+          "  ]\n" +
+          "}\n" +
+          "```\n\n" +
+          "The `id` field is optional — if omitted it is auto-generated as `{language}_{category}_{title-slug}`.",
+        security: [],
+        parameters: [
+          {
+            name: "x-admin-key",
+            in: "header",
+            required: true,
+            schema: { type: "string" },
+            description: "Value of the ADMIN_SECRET environment variable",
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/Lesson" },
+              example: {
+                language: "de",
+                category: "food",
+                title: "At the Restaurant",
+                description: "Order food and drinks like a local.",
+                emoji: "🍽️",
+                items: [
+                  {
+                    id: "steak",
+                    word: "das Steak",
+                    translation: "steak",
+                    article: "das",
+                    example: "Ich möchte ein Steak, bitte.",
+                    exampleTranslation: "I would like a steak, please.",
+                  },
+                ],
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: "Lesson created/overwritten",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    created: { type: "boolean" },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: "Invalid body",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
+              },
+            },
+          },
+          401: {
+            description: "Invalid admin key",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
+              },
+            },
+          },
+        },
+      },
       get: {
         operationId: "listLessons",
         tags: ["Lessons"],
@@ -298,13 +399,33 @@ const spec: OpenAPIV3.Document = {
       get: {
         operationId: "getSession",
         tags: ["Session"],
-        summary: "Get today's due exercises for the authenticated user",
+        summary: "Get exercises for the authenticated user",
         parameters: [
           {
             name: "language",
             in: "query",
             required: true,
             schema: { type: "string", example: "de" },
+          },
+          {
+            name: "mode",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["daily", "weak", "new"],
+              default: "daily",
+            },
+            description:
+              "daily = SRS due queue | weak = struggled/flagged words | new = never studied",
+          },
+          {
+            name: "lessonId",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+            description:
+              "If provided, overrides mode and returns all words in this lesson",
           },
           {
             name: "limit",
@@ -327,6 +448,7 @@ const spec: OpenAPIV3.Document = {
                       items: { $ref: "#/components/schemas/Exercise" },
                     },
                     totalDue: { type: "integer" },
+                    mode: { type: "string", enum: ["daily", "weak", "new"] },
                   },
                 },
               },
@@ -440,6 +562,12 @@ const spec: OpenAPIV3.Document = {
                   activeLanguage: { type: "string", example: "fr" },
                   targetLanguages: { type: "array", items: { type: "string" } },
                   displayName: { type: "string" },
+                  excludedLessons: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Lesson IDs to hide from practice modes",
+                    example: ["de_food_restaurant"],
+                  },
                 },
               },
             },
