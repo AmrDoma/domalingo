@@ -20,6 +20,16 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Pointer cursor on all interactive elements */
+button,
+a,
+[role="button"],
+label,
+select,
+summary {
+  cursor: pointer;
+}
+
 /* Prevent horizontal overflow without creating a scroll container (which would break sticky) */
 html,
 body {
