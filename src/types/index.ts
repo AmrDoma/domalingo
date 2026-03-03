@@ -18,6 +18,12 @@ export interface Language {
 export const SUPPORTED_LANGUAGES: Language[] = [
   { code: "de", name: "German", flag: "🇩🇪" },
   { code: "fr", name: "French", flag: "🇫🇷" },
+  { code: "es", name: "Spanish", flag: "🇪🇸" },
+  { code: "it", name: "Italian", flag: "🇮🇹" },
+  { code: "pt", name: "Portuguese", flag: "🇵🇹" },
+  { code: "nl", name: "Dutch", flag: "🇳🇱" },
+  { code: "pl", name: "Polish", flag: "🇵🇱" },
+  { code: "tr", name: "Turkish", flag: "🇹🇷" },
 ];
 
 // ─── Lesson & Items ───────────────────────────────────────────────
@@ -84,6 +90,9 @@ export interface UserProfile {
 // ─── Practice Mode ───────────────────────────────────────────────
 /** daily = SRS due queue | weak = flagged/failed words | new = never studied */
 export type PracticeMode = "daily" | "weak" | "new";
+
+/** mcq = multiple choice only | fill = fill-in-the-blank only | both = mixed */
+export type ExerciseTypeFilter = "mcq" | "fill" | "both";
 
 // ─── SRS Card ────────────────────────────────────────────────────
 export interface SRSCard {

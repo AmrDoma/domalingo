@@ -7,7 +7,49 @@ import { useSession } from "@/hooks/useSession";
 import { ExerciseCard } from "@/components/exercises/ExerciseCard";
 import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import type { PracticeMode } from "@/types";
+import type { PracticeMode, ExerciseTypeFilter } from "@/types";
+
+const TYPE_OPTIONS: {
+  value: ExerciseTypeFilter;
+  label: string;
+  emoji: string;
+  description: string;
+  color: string;
+  border: string;
+  text: string;
+  badge?: string;
+}[] = [
+  {
+    value: "mcq",
+    label: "Multiple Choice",
+    emoji: "🔤",
+    description: "Pick the correct translation from 4 options. Easier.",
+    color: "bg-indigo-50",
+    border: "border-indigo-200",
+    text: "text-indigo-700",
+    badge: "Easier",
+  },
+  {
+    value: "fill",
+    label: "Complete the word",
+    emoji: "✍️",
+    description: "Type the missing word from memory. More challenging.",
+    color: "bg-amber-50",
+    border: "border-amber-200",
+    text: "text-amber-700",
+    badge: "Harder",
+  },
+  {
+    value: "both",
+    label: "Mixed",
+    emoji: "🎲",
+    description: "A mix of both types. Recommended for balanced practice.",
+    color: "bg-emerald-50",
+    border: "border-emerald-200",
+    text: "text-emerald-700",
+    badge: "Recommended",
+  },
+];
 
 export default function SessionPage() {
   return (
@@ -30,6 +72,16 @@ function SessionContent() {
   const searchParams = useSearchParams();
   const lessonId = searchParams.get("lesson") ?? undefined;
   const mode = (searchParams.get("mode") ?? "daily") as PracticeMode;
+  // null means the user hasn't picked yet (only relevant for lesson sessions)
+  const exerciseTypeParam = searchParams.get(
+    "type",
+  ) as ExerciseTypeFilter | null;
+  // For non-lesson sessions (daily/weak/new) default to "both" immediately
+  const exerciseType: ExerciseTypeFilter =
+    exerciseTypeParam ?? (lessonId ? null! : "both");
+  // Show type picker when a lesson is selected but no type chosen yet
+  const showTypePicker = !!lessonId && exerciseTypeParam === null;
+
   const {
     exercises,
     currentIndex,
@@ -40,19 +92,77 @@ function SessionContent() {
     error,
     startSession,
     submitAnswer,
-  } = useSession(lessonId, mode);
+  } = useSession(lessonId, mode, exerciseType ?? "both");
 
   // Redirect if not authed
   useEffect(() => {
     if (!authLoading && !user && !isGuest) router.replace("/");
   }, [authLoading, user, isGuest, router]);
 
-  // Auto-start once profile is ready
+  // Auto-start once profile is ready — but NOT while waiting for the type picker
   useEffect(() => {
-    if (!authLoading && profile && status === "idle") {
+    if (!authLoading && profile && status === "idle" && !showTypePicker) {
       startSession();
     }
-  }, [authLoading, profile, status, startSession]);
+  }, [authLoading, profile, status, startSession, showTypePicker]);
+
+  // ── Type picker (shown before session starts for lesson mode) ──────────────
+  if (showTypePicker) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-6">
+        <div className="w-full max-w-sm">
+          <button
+            onClick={() => router.back()}
+            className="text-sm text-gray-400 flex items-center gap-1 mb-6 hover:text-gray-600"
+          >
+            ← Back
+          </button>
+          <h1 className="text-2xl font-extrabold text-gray-900 mb-1">
+            Choose exercise type
+          </h1>
+          <p className="text-sm text-gray-500 mb-6">
+            How do you want to practice this lesson?
+          </p>
+          <div className="flex flex-col gap-3">
+            {TYPE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  const params = new URLSearchParams(searchParams.toString());
+                  params.set("type", opt.value);
+                  router.replace(`/session?${params.toString()}`);
+                }}
+                className={`w-full text-left rounded-2xl border-2 p-4 transition-all active:scale-98 hover:shadow-md ${opt.color} ${opt.border}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{opt.emoji}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-bold text-base ${opt.text}`}>
+                        {opt.label}
+                      </span>
+                      {opt.badge && (
+                        <span
+                          className={`text-xs font-semibold px-2 py-0.5 rounded-full ${opt.color} ${opt.text} border ${opt.border}`}
+                        >
+                          {opt.badge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      {opt.description}
+                    </p>
+                  </div>
+                  <span className={`text-lg ${opt.text}`}>→</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   if (authLoading || status === "idle" || status === "loading") {
     return (

@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { AppShell } from "@/components/layout/AppShell";
 
 interface ModeCard {
   mode?: string;
@@ -81,7 +80,7 @@ export default function PracticePage() {
   }
 
   return (
-    <AppShell>
+    <>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Practice</h1>
         <p className="text-sm text-gray-500 mt-1">
@@ -120,6 +119,6 @@ export default function PracticePage() {
           </button>
         ))}
       </div>
-    </AppShell>
+    </>
   );
 }

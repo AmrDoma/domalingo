@@ -10,14 +10,25 @@ interface FillExerciseProps {
   onAnswer: (quality: SRSQuality) => void;
 }
 
-/** Normalize a string for comparison: lowercase, trim, collapse spaces */
-function normalize(s: string): string {
-  return s.toLowerCase().trim().replace(/\s+/g, " ");
+/** Trim and collapse internal whitespace */
+function clean(s: string): string {
+  return s.trim().replace(/\s+/g, " ");
 }
 
-/** Strip article prefix (der/die/das/ein/eine) for lenient checking */
-function stripArticle(s: string): string {
-  return s.replace(/^(der|die|das|ein|eine)\s+/i, "");
+const ARTICLE_RE = /^(der|die|das|ein|eine)\s+/i;
+
+/** Split "der Laptop" → { article: "der", noun: "Laptop" }.
+ *  If no article prefix, article is "". */
+function splitArticle(s: string): { article: string; noun: string } {
+  const cleaned = clean(s);
+  const match = cleaned.match(ARTICLE_RE);
+  if (match) {
+    return {
+      article: match[1].toLowerCase(),
+      noun: cleaned.slice(match[0].length),
+    };
+  }
+  return { article: "", noun: cleaned };
 }
 
 export function FillExercise({ exercise, onAnswer }: FillExerciseProps) {
@@ -35,20 +46,21 @@ export function FillExercise({ exercise, onAnswer }: FillExerciseProps) {
   const check = () => {
     if (revealed || !input.trim()) return;
 
-    const userNorm = normalize(input);
-    const correctNorm = normalize(item.word);
+    const user = splitArticle(input);
+    const correct = splitArticle(item.word);
 
-    // Exact match
-    const exact = userNorm === correctNorm;
-    // Lenient (ignore article)
-    const lenient = stripArticle(userNorm) === stripArticle(correctNorm);
+    // Noun must match exactly (case-sensitive: "Laptop" ≠ "laptop")
+    const nounCorrect = user.noun === correct.noun;
+    // Article is forgiven for capitalisation (Der == der) but must be the right word
+    const articleCorrect =
+      correct.article === "" || user.article === correct.article; // both already lowercased
 
     let q: SRSQuality;
-    if (exact)
-      q = 3; // easy
-    else if (lenient)
-      q = 2; // good (forgot article)
-    else q = 0; // again
+    if (nounCorrect && articleCorrect)
+      q = 3; // exact
+    else if (nounCorrect && !articleCorrect)
+      q = 2; // good – noun right, article wrong/missing
+    else q = 0; // noun wrong → again
 
     setQuality(q);
     setRevealed(true);

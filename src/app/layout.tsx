@@ -7,6 +7,16 @@ export const metadata: Metadata = {
   description: "Learn languages every day, one session at a time.",
   manifest: "/manifest.json",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Domalingo" },
+  icons: {
+    icon: [{ url: "/logo.svg", type: "image/svg+xml" }],
+    apple: "/logo.svg",
+    shortcut: "/logo.svg",
+  },
+  openGraph: {
+    title: "DomaLingo",
+    description: "Learn languages every day, one session at a time.",
+    images: [{ url: "/logo.svg", width: 512, height: 512, alt: "Domalingo" }],
+  },
 };
 
 export const viewport: Viewport = {

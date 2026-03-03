@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
+import { Logo } from "@/components/ui/Logo";
 
 export default function HomePage() {
   const { user, isGuest, loading, signInWithGoogle, continueAsGuest } =
@@ -27,10 +28,9 @@ export default function HomePage() {
       <div className="w-full max-w-sm flex flex-col items-center gap-8">
         {/* Hero */}
         <div className="text-center">
-          <div className="text-7xl mb-4">🦜</div>
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
-            Domalingo
-          </h1>
+          <div className="w-72 mx-auto mb-4">
+            <Logo />
+          </div>
           <p className="text-gray-500 mt-2 text-lg">
             A few minutes a day. Real vocabulary. Real progress.
           </p>

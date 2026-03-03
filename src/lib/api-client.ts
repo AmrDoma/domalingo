@@ -1,5 +1,5 @@
 import { auth } from "@/lib/firebase";
-import type { Lesson, PracticeMode } from "@/types";
+import type { Lesson, PracticeMode, ExerciseTypeFilter } from "@/types";
 
 /** Get the current user's Firebase ID token, or null if not signed in. */
 async function getIdToken(): Promise<string | null> {
@@ -59,17 +59,19 @@ export const api = {
     return res.json();
   },
 
-  /** GET /api/session?language=de&mode=daily|weak|new&limit=20[&lessonId=...] */
+  /** GET /api/session?language=de&mode=daily|weak|new&exerciseType=mcq|fill|both&limit=20[&lessonId=...] */
   async getSession(
     language: string,
     lessonId?: string,
     mode: PracticeMode = "daily",
+    exerciseType: ExerciseTypeFilter = "both",
     limit = 20,
   ) {
     const headers = await authHeaders();
     const params = new URLSearchParams({
       language,
       mode,
+      exerciseType,
       limit: String(limit),
     });
     if (lessonId) params.set("lessonId", lessonId);
@@ -113,6 +115,16 @@ export const api = {
   /** Convenience: update which lessons are excluded from practice */
   async updateExcludedLessons(excludedLessons: string[]) {
     return api.updateProfile({ excludedLessons });
+  },
+
+  /** GET /api/words?language=de – weak words + encountered/total counts */
+  async getWordStats(language: string) {
+    const headers = await authHeaders();
+    const res = await fetch(`${BASE}/api/words?language=${language}`, {
+      headers,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<import("@/app/api/words/route").WordStats>;
   },
 
   /** GET /api/cards?language=de&dueOnly=true */

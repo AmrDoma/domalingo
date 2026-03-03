@@ -10,6 +10,7 @@ import {
   LessonItem,
   SRSCard,
   PracticeMode,
+  ExerciseTypeFilter,
 } from "@/types";
 import { shuffle, pickRandom, today } from "@/lib/utils";
 
@@ -98,6 +99,7 @@ export interface SessionActions {
 export function useSession(
   lessonId?: string,
   mode: PracticeMode = "daily",
+  exerciseType: ExerciseTypeFilter = "both",
 ): SessionState & SessionActions {
   const { profile, isGuest } = useAuth();
 
@@ -128,7 +130,12 @@ export function useSession(
     try {
       const data = isGuest
         ? await buildGuestExercises(profile.activeLanguage)
-        : await api.getSession(profile.activeLanguage, lessonId, mode);
+        : await api.getSession(
+            profile.activeLanguage,
+            lessonId,
+            mode,
+            exerciseType,
+          );
 
       if (!data.exercises.length) {
         setError("No exercises available right now. Come back tomorrow!");
@@ -143,7 +150,7 @@ export function useSession(
       setError("Failed to start session. Please try again.");
       setStatus("error");
     }
-  }, [profile, isGuest, lessonId, mode]);
+  }, [profile, isGuest, lessonId, mode, exerciseType]);
 
   const submitAnswer = useCallback(
     (quality: SRSQuality) => {

@@ -10,17 +10,19 @@ import {
   Lesson,
   LessonItem,
   PracticeMode,
+  ExerciseTypeFilter,
 } from "@/types";
 import { today, shuffle, pickRandom } from "@/lib/utils";
 
 const MAX_SESSION = 20;
 
 // ─────────────────────────────────────────────────────────────────
-// GET /api/session?language=de&mode=daily|weak|new&limit=20&lessonId=…
+// GET /api/session?language=de&mode=daily|weak|new&exerciseType=mcq|fill|both&limit=20&lessonId=…
 // mode=daily (default) → SRS due cards
 // mode=weak            → cards flagged for review (struggled words)
 // mode=new             → cards never studied yet (repetitions=0)
 // lessonId             → overrides mode; returns all cards for that lesson
+// exerciseType         → mcq | fill | both (default)
 // ─────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const decoded = await verifyAuth(req);
@@ -33,6 +35,8 @@ export async function GET(req: NextRequest) {
   const lessonId = req.nextUrl.searchParams.get("lessonId");
   const mode = (req.nextUrl.searchParams.get("mode") ??
     "daily") as PracticeMode;
+  const exerciseType = (req.nextUrl.searchParams.get("exerciseType") ??
+    "both") as ExerciseTypeFilter;
   const limit = Math.min(
     Number(req.nextUrl.searchParams.get("limit") ?? MAX_SESSION),
     50,
@@ -76,58 +80,58 @@ export async function GET(req: NextRequest) {
       }),
   );
 
-  // Bootstrap missing cards (batch write — only for never-seen cards)
-  const batch = adminDb.batch();
-  let bootstrapped = 0;
-
-  for (const lesson of lessons) {
-    for (const item of lesson.items) {
-      const cardId = `${language}_${lesson.id}_${item.id}`;
-      if (!existingCards.has(cardId)) {
-        const card: SRSCard = {
-          id: cardId,
-          uid,
-          language,
-          lessonId: lesson.id,
-          itemId: item.id,
-          interval: 1,
-          easeFactor: 2.5,
-          repetitions: 0,
-          dueDate: today(),
-          lastReviewed: null,
-        };
-        const cardRef = adminDb
-          .collection("users")
-          .doc(uid)
-          .collection("cards")
-          .doc(cardId);
-        batch.set(cardRef, card);
-        existingCards.set(cardId, card);
-        bootstrapped++;
-      }
-    }
-  }
-  if (bootstrapped > 0) await batch.commit();
-
   // 2. Select cards based on mode (or lessonId override)
   const todayStr = today();
   let cards: SRSCard[];
 
+  // Helper: build a virtual (unsaved) card stub for items never yet answered
+  const virtualCard = (lesson: Lesson, item: LessonItem): SRSCard => ({
+    id: `${language}_${lesson.id}_${item.id}`,
+    uid,
+    language,
+    lessonId: lesson.id,
+    itemId: item.id,
+    interval: 1,
+    easeFactor: 2.5,
+    repetitions: 0,
+    dueDate: today(),
+    lastReviewed: null,
+  });
+
   if (lessonId) {
     // Explicit lesson mode — show all words in that lesson regardless of exclusion
-    cards = shuffle(
-      Array.from(existingCards.values()).filter((c) => c.lessonId === lessonId),
-    ).slice(0, limit);
+    // Include virtual cards for items not yet answered (lazy bootstrap)
+    const targetLesson = lessons.find((l) => l.id === lessonId);
+    if (!targetLesson) {
+      cards = [];
+    } else {
+      const lessonCards = targetLesson.items.map((item) => {
+        const cardId = `${language}_${targetLesson.id}_${item.id}`;
+        return existingCards.get(cardId) ?? virtualCard(targetLesson, item);
+      });
+      cards = shuffle(lessonCards).slice(0, limit);
+    }
   } else if (mode === "weak") {
     // Struggled / failed words
     cards = shuffle(
       Array.from(existingCards.values()).filter((c) => c.flaggedForReview),
     ).slice(0, limit);
   } else if (mode === "new") {
-    // Words never studied
-    cards = shuffle(
-      Array.from(existingCards.values()).filter((c) => c.repetitions === 0),
-    ).slice(0, limit);
+    // Words never studied: existing repetitions=0 cards + items with no card yet
+    const seenCardIds = new Set(existingCards.keys());
+    const virtualNewCards: SRSCard[] = [];
+    for (const lesson of lessons) {
+      if (excludedLessons.includes(lesson.id)) continue;
+      for (const item of lesson.items) {
+        const cardId = `${language}_${lesson.id}_${item.id}`;
+        if (!seenCardIds.has(cardId))
+          virtualNewCards.push(virtualCard(lesson, item));
+      }
+    }
+    cards = shuffle([
+      ...Array.from(existingCards.values()).filter((c) => c.repetitions === 0),
+      ...virtualNewCards,
+    ]).slice(0, limit);
   } else {
     // Daily: SRS due cards first, fall back to earliest-due
     const dueCards = Array.from(existingCards.values()).filter(
@@ -169,9 +173,16 @@ export async function GET(req: NextRequest) {
       const item = lesson.items.find((i) => i.id === card.itemId);
       if (!item) return null;
 
-      // For weak/new modes always start with MCQ; mix in fill once the user has reps
-      const typePool: Array<"mcq" | "fill"> =
-        card.repetitions < 2 ? ["mcq"] : ["mcq", "mcq", "fill"];
+      // Determine type pool based on exerciseType param and card repetitions
+      let typePool: Array<"mcq" | "fill">;
+      if (exerciseType === "mcq") {
+        typePool = ["mcq"];
+      } else if (exerciseType === "fill") {
+        typePool = ["fill"];
+      } else {
+        // "both": weight towards MCQ for fresh cards, mix in fill once user has reps
+        typePool = card.repetitions < 2 ? ["mcq"] : ["mcq", "mcq", "fill"];
+      }
       const type = typePool[Math.floor(Math.random() * typePool.length)];
 
       const cat = itemCategory.get(item.id);
@@ -210,23 +221,52 @@ export async function POST(req: NextRequest) {
   const batch = adminDb.batch();
   let cardsUpdated = 0;
 
-  for (const result of body.results) {
-    const cardRef = adminDb
-      .collection("users")
-      .doc(uid)
-      .collection("cards")
-      .doc(result.cardId);
+  // Fetch all cards in parallel (lazy: card may not exist yet)
+  const cardRefs = body.results.map((r) =>
+    adminDb.collection("users").doc(uid).collection("cards").doc(r.cardId),
+  );
+  const snaps = await Promise.all(cardRefs.map((ref) => ref.get()));
 
-    const snap = await cardRef.get();
-    if (!snap.exists) continue;
+  for (let i = 0; i < body.results.length; i++) {
+    const result = body.results[i];
+    const cardRef = cardRefs[i];
+    const snap = snaps[i];
 
-    const card = snap.data() as SRSCard;
+    let card: SRSCard;
+    if (snap.exists) {
+      card = snap.data() as SRSCard;
+    } else {
+      // Lazy create: parse components from cardId (format: lang_lessonId_itemId)
+      const parts = result.cardId.split("_");
+      const lang = parts[0] as LanguageCode;
+      const itemId = parts[parts.length - 1];
+      const lessonId = parts.slice(1, -1).join("_");
+      card = {
+        id: result.cardId,
+        uid,
+        language: lang,
+        lessonId,
+        itemId,
+        interval: 1,
+        easeFactor: 2.5,
+        repetitions: 0,
+        dueDate: today(),
+        lastReviewed: null,
+      };
+    }
+
     const updated = calculateSRS(card, result.quality as SRSQuality);
-    batch.update(cardRef, {
-      ...updated,
-      // Flag for review when the user struggles; clear when they get it right
-      flaggedForReview: result.quality <= 1,
-    } as unknown as Record<string, unknown>);
+    // Use set+merge so it works for both new and existing cards
+    batch.set(
+      cardRef,
+      {
+        ...card,
+        ...updated,
+        // Flag for review when the user struggles; clear when they get it right
+        flaggedForReview: result.quality <= 1,
+      } as unknown as Record<string, unknown>,
+      { merge: true },
+    );
     cardsUpdated++;
   }
 

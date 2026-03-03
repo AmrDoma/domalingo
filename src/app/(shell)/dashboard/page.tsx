@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useLessons } from "@/hooks/useLessons";
-import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
 import { SUPPORTED_LANGUAGES } from "@/types";
 
@@ -34,7 +33,7 @@ export default function DashboardPage() {
   const practicedToday = profile.lastSessionDate === todayStr;
 
   return (
-    <AppShell>
+    <>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -172,7 +171,7 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }
 

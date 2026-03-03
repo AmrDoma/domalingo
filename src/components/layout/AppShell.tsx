@@ -2,23 +2,21 @@
 
 import { BottomNav } from "./BottomNav";
 import { GuestBanner } from "./GuestBanner";
+import { Logo } from "@/components/ui/Logo";
 
-interface AppShellProps {
-  children: React.ReactNode;
-  /** Hide the bottom nav (e.g. during a session) */
-  hideNav?: boolean;
-}
-
-export function AppShell({ children, hideNav = false }: AppShellProps) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main
-        className={`flex-1 max-w-lg mx-auto w-full px-4 pt-6 ${hideNav ? "pb-6" : "pb-24"}`}
-      >
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-sm border-b border-gray-100">
+        <div className="max-w-lg mx-auto w-full px-4 h-14 flex items-center">
+          <Logo className="h-8 w-auto" />
+        </div>
+      </header>
+      <main className="flex-1 max-w-lg mx-auto w-full px-4 pt-6 pb-24">
         <GuestBanner />
         {children}
       </main>
-      {!hideNav && <BottomNav />}
+      <BottomNav />
     </div>
   );
 }

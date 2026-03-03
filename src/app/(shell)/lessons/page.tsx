@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useLessons } from "@/hooks/useLessons";
-import { AppShell } from "@/components/layout/AppShell";
 import { SUPPORTED_LANGUAGES } from "@/types";
 
 export default function LessonsPage() {
@@ -29,7 +28,7 @@ export default function LessonsPage() {
   );
 
   return (
-    <AppShell>
+    <>
       {/* Header */}
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-gray-900">Lessons</h1>
@@ -127,6 +126,6 @@ export default function LessonsPage() {
           ))}
         </div>
       )}
-    </AppShell>
+    </>
   );
 }
