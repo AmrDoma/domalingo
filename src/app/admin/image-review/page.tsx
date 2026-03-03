@@ -34,6 +34,13 @@ interface ItemCardProps {
   item: LessonItem;
   lesson: Lesson;
   adminKey: string;
+  /**
+   * Image URL pre-fetched by the parent via POST /api/images.
+   * - `string`    → use this URL, skip the individual fetch
+   * - `null`      → batch lookup found nothing, skip the fetch
+   * - `undefined` → batch not done yet, fall back to individual fetch
+   */
+  prefetchedImageUrl?: string | null;
   /** called after a successful save so parent can update its state */
   onSaved: (
     lessonId: string,
@@ -48,7 +55,7 @@ function buildProxyUrl(query: string, source: string, bust?: number) {
   return `/api/image-proxy?${p.toString()}`;
 }
 
-function ItemCard({ item, lesson, adminKey, onSaved }: ItemCardProps) {
+function ItemCard({ item, lesson, adminKey, prefetchedImageUrl, onSaved }: ItemCardProps) {
   const source = lesson.imageSource ?? "wikipedia";
   const initialQuery = item.unsplashQuery ?? item.word;
   const initialDirectUrl = item.imageUrl ?? "";
@@ -58,9 +65,16 @@ function ItemCard({ item, lesson, adminKey, onSaved }: ItemCardProps) {
   const [showUrlField, setShowUrlField] = useState(!!initialDirectUrl);
 
   // "proxy" = showing auto-fetched image; "direct" = showing manual URL
-  const [proxyImgSrc, setProxyImgSrc] = useState<string | null>(null);
+  // If a pre-fetched URL was passed in, use it immediately.
+  const [proxyImgSrc, setProxyImgSrc] = useState<string | null>(
+    prefetchedImageUrl !== undefined ? prefetchedImageUrl : null,
+  );
   const [proxyStatus, setProxyStatus] = useState<"loading" | "ok" | "error">(
-    "loading",
+    prefetchedImageUrl !== undefined
+      ? prefetchedImageUrl
+        ? "loading" // img will fire onLoad → "ok"
+        : "error"
+      : "loading",
   );
   const [directStatus, setDirectStatus] = useState<
     "idle" | "loading" | "ok" | "error"
@@ -95,8 +109,9 @@ function ItemCard({ item, lesson, adminKey, onSaved }: ItemCardProps) {
     }
   }
 
-  // Load proxy on mount (always fetch so it's ready if user clears direct URL)
+  // Load proxy on mount — skip if a pre-fetched URL was already provided
   useEffect(() => {
+    if (prefetchedImageUrl !== undefined) return;
     fetchProxy(initialQuery);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -315,6 +330,10 @@ export default function ImageReviewPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Pre-fetched image URLs keyed by "query:source"
+  const [imageCache, setImageCache] = useState<Map<string, string | null>>(
+    new Map(),
+  );
   const [filterLesson, setFilterLesson] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => {
@@ -368,7 +387,41 @@ export default function ImageReviewPage() {
         });
         if (!res.ok) throw new Error("Failed to load lessons");
         const data: Lesson[] = await res.json();
-        setLessons(data.filter((l) => l.imageSearch));
+        const filtered = data.filter((l) => l.imageSearch);
+        setLessons(filtered);
+
+        // Batch-fetch all images in one POST /api/images request.
+        // Deduplicate by "query:source" to avoid redundant API calls.
+        try {
+          const seen = new Set<string>();
+          const lookups: { q: string; source: string }[] = [];
+          for (const lesson of filtered) {
+            const src = lesson.imageSource ?? "wikipedia";
+            for (const it of lesson.items) {
+              const q = (it.unsplashQuery ?? it.word).trim();
+              const key = `${q}:${src}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                lookups.push({ q, source: src });
+              }
+            }
+          }
+          if (lookups.length > 0) {
+            const batchRes = (await fetch("/api/images", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ items: lookups }),
+            }).then((r) => r.json())) as { q: string; url: string | null }[];
+
+            const cache = new Map<string, string | null>();
+            batchRes.forEach((result, idx) => {
+              cache.set(`${result.q}:${lookups[idx].source}`, result.url);
+            });
+            setImageCache(cache);
+          }
+        } catch {
+          /* silently fail — ItemCard will fetch individually as fallback */
+        }
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -637,15 +690,25 @@ export default function ImageReviewPage() {
             {/* Cards grid — hidden when collapsed */}
             {!isCollapsed && (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-1">
-                {items.map((item) => (
+                {items.map((item) => {
+                  const q = (item.unsplashQuery ?? item.word).trim();
+                  const src = lesson.imageSource ?? "wikipedia";
+                  const cacheKey = `${q}:${src}`;
+                  return (
                   <ItemCard
                     key={item.id}
                     item={item}
                     lesson={lesson}
                     adminKey={adminKey!}
                     onSaved={handleSaved}
+                    prefetchedImageUrl={
+                      imageCache.has(cacheKey)
+                        ? imageCache.get(cacheKey)
+                        : undefined
+                    }
                   />
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
