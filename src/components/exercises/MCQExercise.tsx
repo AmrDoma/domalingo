@@ -19,8 +19,12 @@ export function MCQExercise({ exercise, onAnswer }: MCQExerciseProps) {
   // Build 4 options: correct + 3 distractors, shuffled once on mount
   const [options] = useState(() => {
     const all = [
-      { id: item.id,           text: item.translation,  correct: true  },
-      ...distractors.map((d) => ({ id: d.id, text: d.translation, correct: false })),
+      { id: item.id, text: item.translation, correct: true },
+      ...distractors.map((d) => ({
+        id: d.id,
+        text: d.translation,
+        correct: false,
+      })),
     ];
     // Fisher-Yates in place
     for (let i = all.length - 1; i > 0; i--) {
@@ -54,7 +58,9 @@ export function MCQExercise({ exercise, onAnswer }: MCQExerciseProps) {
           {item.word}
         </h2>
         {item.article && (
-          <span className="text-lg text-gray-400 mt-1 block">{item.article}</span>
+          <span className="text-lg text-gray-400 mt-1 block">
+            {item.article}
+          </span>
         )}
       </div>
 
@@ -62,12 +68,12 @@ export function MCQExercise({ exercise, onAnswer }: MCQExerciseProps) {
       <div className="grid grid-cols-1 gap-3">
         {options.map((opt) => {
           const isSelected = selected === opt.id;
-          const isCorrect  = opt.correct;
+          const isCorrect = opt.correct;
 
           let state: "default" | "correct" | "wrong" | "missed" = "default";
           if (revealed) {
-            if (isCorrect)              state = "correct";
-            else if (isSelected)        state = "wrong";
+            if (isCorrect) state = "correct";
+            else if (isSelected) state = "wrong";
           }
 
           return (
@@ -81,14 +87,13 @@ export function MCQExercise({ exercise, onAnswer }: MCQExerciseProps) {
                   "border-gray-200 bg-white text-gray-800 hover:border-indigo-300 hover:bg-indigo-50 active:scale-[0.98]",
                 state === "correct" &&
                   "border-emerald-400 bg-emerald-50 text-emerald-800",
-                state === "wrong" &&
-                  "border-red-400 bg-red-50 text-red-800",
-                revealed && state === "default" && "opacity-50"
+                state === "wrong" && "border-red-400 bg-red-50 text-red-800",
+                revealed && state === "default" && "opacity-50",
               )}
             >
               <span className="flex items-center gap-3">
                 {revealed && state === "correct" && <span>✅</span>}
-                {revealed && state === "wrong"   && <span>❌</span>}
+                {revealed && state === "wrong" && <span>❌</span>}
                 {opt.text}
               </span>
             </button>
@@ -101,14 +106,21 @@ export function MCQExercise({ exercise, onAnswer }: MCQExerciseProps) {
         <div className="bg-indigo-50 rounded-2xl px-4 py-3 text-sm">
           <p className="font-medium text-indigo-700 italic">"{item.example}"</p>
           {item.exampleTranslation && (
-            <p className="text-indigo-500 mt-0.5">— {item.exampleTranslation}</p>
+            <p className="text-indigo-500 mt-0.5">
+              — {item.exampleTranslation}
+            </p>
           )}
         </div>
       )}
 
       {/* Continue */}
       {revealed && (
-        <Button fullWidth size="lg" onClick={handleContinue} disabled={submitting}>
+        <Button
+          fullWidth
+          size="lg"
+          onClick={handleContinue}
+          disabled={submitting}
+        >
           Continue
         </Button>
       )}

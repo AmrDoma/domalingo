@@ -36,7 +36,10 @@ async function buildGuestExercises(
 
   // itemId → category for same-category distractors
   const itemCategory = new Map<string, string>();
-  for (const l of fullLessons as Array<{ items: LessonItem[]; category: string }>) {
+  for (const l of fullLessons as Array<{
+    items: LessonItem[];
+    category: string;
+  }>) {
     for (const i of l.items) itemCategory.set(i.id, l.category);
   }
 
